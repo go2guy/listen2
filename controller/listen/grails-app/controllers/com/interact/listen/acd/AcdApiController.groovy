@@ -23,24 +23,23 @@ class AcdApiController
     def historyService;
 
     def updateAgent = {
-
         if(!params.id)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [id]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [id]'])
             log.warn 'Missing required parameter [id]'
             return
         }
 
         if(!params.apiKey)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [apiKey]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [apiKey]'])
             log.warn 'Missing required parameter [apiKey]'
             return
         }
 
         if(!params.status)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [status]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [status]'])
             log.warn 'Missing required parameter [status]'
             return
         }
@@ -74,31 +73,29 @@ class AcdApiController
             else
             {
                 log.warn("Bad status value: " + toggle);
-                response.status = HttpServletResponse.SC_BAD_REQUEST;
+                renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: "Bad status value: " + toggle])
             }
 
             if(agent.validate() && agent.save())
             {
                 log.debug("Agent status updated.");
                 historyService.acdApiSet(org, agent, statusSet);
-                response.status = HttpServletResponse.SC_OK;
-                render(contentType: 'application/json') {
-                    id = agent.id;
-                    status = agent.getAcdUserStatus().getAcdQueueStatus().toString();
-                    statusModified = agent.getAcdUserStatus().getStatusModified();
-                }
+                renderJsonResponse(HttpServletResponse.SC_OK, [
+                        id: agent.id,
+                        status: agent.getAcdUserStatus().getAcdQueueStatus().toString(),
+                        statusModified: agent.getAcdUserStatus().getStatusModified()
+                ])
             }
             else
             {
                 log.error("Unable to save agent.");
-                response.status = HttpServletResponse.SC_BAD_REQUEST;
+                renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Unable to save agent'])
             }
         }
         else
         {
             log.warn("Bad agent value: " + agentId);
-            render(status: HttpServletResponse.SC_NOT_FOUND, contentType: 'application/json',
-                    text: '{"message": "The agent requested could not be found"}');
+            renderJsonResponse(HttpServletResponse.SC_NOT_FOUND, [message: 'The agent requested could not be found'])
         }
 
         response.flushBuffer()
@@ -107,14 +104,14 @@ class AcdApiController
     def getAgent = {
         if(!params.id)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [id]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [id]'])
             log.warn 'Missing required parameter [id]'
             return
         }
 
         if(!params.apiKey)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [apiKey]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [apiKey]'])
             log.warn 'Missing required parameter [apiKey]'
             return
         }
@@ -130,17 +127,16 @@ class AcdApiController
         User agent = User.findByIdAndOrganization(agentId, org);
         if(agent != null)
         {
-            render(contentType: 'application/json') {
-                id = agent.id;
-                status = agent.getAcdUserStatus().getAcdQueueStatus().toString();
-                statusModified = agent.getAcdUserStatus().getStatusModified()?.withZone(DateTimeZone.UTC)?.toString("yyyy-MM-dd HH:mm:ss");
-            }
+            renderJsonResponse(HttpServletResponse.SC_OK, [
+                    id: agent.id,
+                    status: agent.getAcdUserStatus().getAcdQueueStatus().toString(),
+                    statusModified: agent.getAcdUserStatus().getStatusModified()?.withZone(DateTimeZone.UTC)?.toString("yyyy-MM-dd HH:mm:ss")
+            ])
         }
         else
         {
             log.warn "Agent not found."
-            render(status: HttpServletResponse.SC_NOT_FOUND, contentType: 'application/json',
-                    text: '{"message": "The agent requested could not be found"}');
+            renderJsonResponse(HttpServletResponse.SC_NOT_FOUND, [message: 'The agent requested could not be found'])
             return;
         }
 
@@ -149,16 +145,17 @@ class AcdApiController
 
     def getActiveCall = {
         log.debug "getActiveCall request with params ${params}"
+
         if(!params.apiKey)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [apiKey]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [apiKey]'])
             log.warn 'Missing required parameter [apiKey]'
             return
         }
 
         if(!params.username)
         {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing required parameter [username]")
+            renderJsonResponse(HttpServletResponse.SC_BAD_REQUEST, [message: 'Missing required parameter [username]'])
             log.warn 'Missing required parameter [username]'
             return
         }
@@ -166,7 +163,7 @@ class AcdApiController
         Organization org = Organization.findByApiKey(params.apiKey);
 
         if (!org) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Bad Api Key")
+            renderJsonResponse(HttpServletResponse.SC_UNAUTHORIZED, [message: 'Bad Api Key'])
             log.warn "Organization for apiKey [${params.apiKey}] not found."
             return
         }
@@ -174,7 +171,7 @@ class AcdApiController
         User user = User.findByOrganizationAndUsername(org, params.username)
 
         if (!user) {
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, "Username not found")
+            renderJsonResponse(HttpServletResponse.SC_NOT_FOUND, [message: 'Username not found'])
             log.warn "Username [${params.username}] for org [${org.name}] not found."
             return
         }
@@ -183,16 +180,22 @@ class AcdApiController
         def acdCall = AcdCall.findByUser(user)
 
         if (acdCall) {
-            render(contentType: 'application/json') {
-                callId = acdCall.getCommonCallId()
-                availability = user.getAcdUserStatus()?.getAcdQueueStatus()?.name()
-                callStatus = "IN_PROGRESS"
-                callStartTime = acdCall.getInitTime()?.getMillis() / 1000
-            }
+            renderJsonResponse(HttpServletResponse.SC_OK, [
+                    callId: acdCall.getCommonCallId(),
+                    availability: user.getAcdUserStatus()?.getAcdQueueStatus()?.name(),
+                    callStatus: "IN_PROGRESS",
+                    callStartTime: acdCall.getInitTime()?.getMillis() / 1000
+            ])
             return
         }
 
         log.warn "No Active ACD Calls found for user ${params.username}"
-        response.sendError(HttpServletResponse.SC_NOT_FOUND, "No Active Acd Record Found")
+        renderJsonResponse(HttpServletResponse.SC_NOT_FOUND, [message: 'No active call was found for the username requested'])
+    }
+
+    private def renderJsonResponse(def statusCode, def jsonMap) {
+        render(contentType: 'application/json', status: statusCode) {
+            jsonMap
+        }
     }
 }
